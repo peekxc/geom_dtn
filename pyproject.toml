@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools==60.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geom_dtn"
+version = "0.1.0"
+description = "Geometry-informed DTN"
+authors = ["Matt Piekenbrock <matt.piekenbrock@gmail.com>"]
+license = "Apache 2.0"
+readme = "README.md"
+python = "^3.8"
+
