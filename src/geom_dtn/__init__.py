@@ -1,5 +1,7 @@
 from .routing import load_satellites 
 
+import route
+
 from typing import * 
 from numpy.typing import ArrayLike
 from skyfield.api import Loader, EarthSatellite, load, wgs84 

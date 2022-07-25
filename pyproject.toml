@@ -1,13 +1,39 @@
 [build-system]
-requires = ["setuptools==60.0", "wheel"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+# [build-system]
+# requires = ["hatchling>=1.5.0"]
+# build-backend = "hatchling.build"
+
 [project]
-name = "geom_dtn"
-version = "0.1.0"
-description = "Geometry-informed DTN"
-authors = ["Matt Piekenbrock <matt.piekenbrock@gmail.com>"]
-license = "Apache 2.0"
+name = "geom-dtn"
+version = "0.0.1"
+description = "."
 readme = "README.md"
-python = "^3.8"
+license = {file = "LICENSE.txt"} # "Apache-2.0"
+requires-python = ">=3.7, <4"
+authors = [
+    { name = "Matt Piekenbrock", email = "matt.piekenbrock@gmail.com" }
+]
+dependencies = [
+  "numpy",
+  "scipy",
+  "skyfield",
+  "matplotlib"
+]
+
+# [tool.hatch.build]
+# directory = "dist"
+
+# [tool.hatch.build.targets.sdist]
+# packages = ["src/geom_dtn"]
+# exclude = ["/ignore", "/dist", "/notes"]
+
+# [tool.hatch.build.targets.wheel]
+# packages = ["src/geom_dtn", "src/geom_dtn/ext"]
+# exclude = ["/ignore", "/dist", "/notes"]
+
+# [project.entry-points.extensions]
+# hatch_build = "geom_dtn:ExampleExtensionModules"
 

@@ -25,8 +25,20 @@ contact_plan = np.array([
 import networkx as nx
 G = nx.MultiGraph()
 n = int(np.max(contact_plan[:,[0,1]].flatten()))
-G.add_nodes_from(range(n))
+G.add_nodes_from(range(1, n+1))
 keys = G.add_edges_from([(int(i),int(j),{ "start": s, "end": e }) for (i,j,s,e) in contact_plan])
+
+# nx.draw_networkx(G)
+pos = nx.planar_layout(G)
+ax = plt.gca()
+nx.draw_networkx_nodes(G, pos, node_color = 'r', node_size = 200, alpha = 1)
+for e in G.edges:
+  opt = dict(arrowstyle="->", color="0.5", shrinkA=5, shrinkB=5, patchA=None, patchB=None, connectionstyle="arc3,rad=rrr".replace('rrr',str(0.3*e[2])))
+  ax.annotate("",xy=pos[e[0]], xycoords='data',xytext=pos[e[1]], textcoords='data',arrowprops=opt)
+plt.axis('off')
+nx.draw_networkx_nodes(G, pos, node_color = 'r', node_size = 200, alpha = 1)
+nx.draw_networkx_labels(G, pos)
+plt.show()
 
 
 # def RoutingNode():
@@ -73,9 +85,73 @@ from numpy.typing import ArrayLike
 
 import numpy as np 
 import simpy 
-from simpy import Environment, Resource, Store, Timeout, Event
+from simpy import Environment, Resource, Store, Timeout, Event, Container
 
 from dataclasses import dataclass
+
+
+G = nx.Graph()
+G.add_nodes_from(range(3))
+G.add_edges_from([(0,1), (1,2)])
+
+def router(node_id: int):
+  if node_id == 0:
+    return(1)
+  elif node_id == 1:
+    return(2)
+  return(2)
+
+class Node(object):
+  def __init__(self, env, G, node_id: int, f: Callable, qs: int = 10):
+    self.G = G
+    self.env = env
+    self.id = node_id
+    self.buffer = Container(env, capacity=qs)
+    self.action = env.process(self.run())
+    self.oracle = f
+
+  def run(self):
+    while True:
+      next_node = self.oracle(self.id)
+      if next_node == self.id:
+        yield self.env.timeout(1) # tick 
+      else: 
+        
+        yield self.env.timeout(1) # tick 
+
+class Edge(object):
+  def __init__(self, env, edge_id: Tuple):
+    self.env = env
+    self.id = edge_id
+    self.buffer = Container(env, capacity=qs)
+
+def transfer_edge(self, G, node_id: int, target_id: int, amount: int): 
+  assert target_id in list(G.neighbors(node_id))
+  a, b = min(node_id,target_id), max(node_id,target_id)
+  E = G.edges[(a,b)]['p']
+  E.buffer.put(amount)
+  yield self.env.timeout(duration)
+
+
+
+env = Environment()
+
+
+
+node_ids = np.fromiter(G.nodes, int)
+node_attr = { nid : dict(p=Node(env, nid, cap)) for nid, cap in zip(node_ids, [10,2,10]) }
+nx.set_node_attributes(G, node_attr)
+
+
+
+
+
+
+def Node(env, id: int, ):
+  while True: 
+    yield env.timeout(1) # tick 
+
+
 
 @dataclass(init=True)
 class Message:
