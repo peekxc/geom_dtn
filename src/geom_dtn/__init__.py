@@ -9,10 +9,23 @@ from itertools import combinations
 from datetime import datetime
 from array import array
 
+import sys
 import os 
 import importlib.resources as pkg_resources
 import numpy as np
 import matplotlib.pyplot as plt
+
+## From: https://stackoverflow.com/questions/3160699/python-progress-bar
+def progressbar(it, count=None, prefix="", size=60, out=sys.stdout): # Python3.6+
+  count = len(it) if count == None else count 
+  def show(j):
+    x = int(size*j/count)
+    print(f"{prefix}[{u'█'*x}{('.'*(size-x))}] {j}/{count}", end='\r', file=out, flush=True)
+  show(0)
+  for i, item in enumerate(it):
+    yield item
+    show(i+1)
+  print("\n", flush=True, file=out)
 
 def plot_earth_3D(wireframe=True, scale=1/5, surface_kwargs = None, **kwargs):
   # from: https://stackoverflow.com/questions/30269099/creating-a-rotatable-3d-earth
@@ -102,7 +115,7 @@ def dist_line2sphere(s1: ArrayLike, s2: ArrayLike, R: float = 1.0, sc = Optional
   q = t * s + s1
   return(np.linalg.norm(q - sc) - R)
 
-def sat_contact_plan(satellites: List, s_time: Optional[datetime] = None, e_time: Optional[datetime] = None, resolution: int = 200, ground_stations: Optional[List] = None):
+def sat_contact_plan(satellites: List, s_time: Optional[datetime] = None, e_time: Optional[datetime] = None, resolution: int = 20, ground_stations: Optional[List] = None, progress: bool = False):
   '''
   Generate a contact plan matrix (m x 4) of m contacts whose rows have the format: 
 
@@ -110,49 +123,68 @@ def sat_contact_plan(satellites: List, s_time: Optional[datetime] = None, e_time
 
   whose contacts [s, e) correspond to line-of-sight between satellites i and j.
 
+  i: int = integer index in [0, n) indicating the first satellite
+  j: int = integer index in [0, n) indicating the second satellite
+  s: datetime = 
+
 
   '''
-  s_time = np.min([sat.epoch.utc_datetime() for sat in satellites])
-  e_time = np.max([sat.epoch.utc_datetime() for sat in satellites])
+  if s_time == None: 
+    s_time = np.min([sat.epoch.utc_datetime() for sat in satellites])
+  if e_time == None: 
+    e_time = np.max([sat.epoch.utc_datetime() for sat in satellites])
+  assert type(s_time) == datetime and type(e_time) == datetime
   
+  ## Load timescale and create discretely-interpolated time events
   from geom_dtn import data as package_data_mod
   load = Loader(package_data_mod.__path__._path[0])
   ts = load.timescale()
-  # planets = load('de421.bsp')
-
-  Contacts = array('f')
   time_points = ts.linspace(ts.from_datetime(s_time), ts.from_datetime(e_time), resolution)
   tp_tt = np.array([tp-ts.from_datetime(s_time) for tp in time_points]) # time points numerical values
-  for i, (sat1, sat2) in enumerate(combinations(satellites, 2)):
-    sat1_orbit = sat1.at(time_points).position.km.T
-    sat2_orbit = sat2.at(time_points).position.km.T
-    D_line = np.array([dist_line2sphere(p0, p1, R=6378.0) for (p0, p1) in zip(sat1_orbit, sat2_orbit)])
-    f = CubicSpline(tp_tt, D_line)
-    roots = f.roots(discontinuity=False, extrapolate='periodic')
-    #contacts = []
-    if len(roots) > 1:
-      LOS_sgn = np.sign(f(roots + 0.0001)) ## -1 := no in LOS, 1 := in LOS 
-      for j in range(len(LOS_sgn)-1):
-        if LOS_sgn[j] == 1.0 and LOS_sgn[j+1] == -1.0:
-          Contacts.extend(np.append(unrank_comb2(i, len(satellites)), [roots[j], roots[j+1]]))
-    #Contacts.append(contacts)
 
-  ground_contacts = array('f')
-  for i, sat in enumerate(satellites):
-    sat_pos = sat.at(time_points).position.km.T
-    for j, gs in enumerate(ground_stations):
-      gs_pos = np.reshape(np.tile(gs, sat_pos.shape[0]), (sat_pos.shape[0],3))
-      D_line = np.array([dist_line2sphere(p0, p1, R=6378.0) for (p0, p1) in zip(sat_pos, gs_pos)])
+  ## Generate satellite contacts 
+  sat_contacts = array('f')
+  if not(satellites is None):
+    n = len(satellites)
+    N = n*(n-1)/2
+    sat_pair_gen = progressbar(enumerate(combinations(satellites, 2)), count=N) if progress else enumerate(combinations(satellites, 2))
+    for i, (sat1, sat2) in sat_pair_gen:
+      sat1_orbit = sat1.at(time_points).position.km.T
+      sat2_orbit = sat2.at(time_points).position.km.T
+      D_line = np.array([dist_line2sphere(p0, p1, R=6378.0) for (p0, p1) in zip(sat1_orbit, sat2_orbit)])
       f = CubicSpline(tp_tt, D_line)
       roots = f.roots(discontinuity=False, extrapolate='periodic')
       if len(roots) > 1:
         LOS_sgn = np.sign(f(roots + 0.0001)) ## -1 := no in LOS, 1 := in LOS 
         for j in range(len(LOS_sgn)-1):
-          if LOS_sgn[j] == 1.0 and LOS_sgn[j+1] <= 0.0:
-            ground_contacts.extend([i,j,roots[j], roots[j+1]])
-  contact_plan = np.reshape(np.asarray(Contacts).flatten(), (int(len(Contacts)/4), 4))
-  ground_contact_plan = np.reshape(np.asarray(ground_contacts).flatten(), (int(len(ground_contacts)/4), 4))
-  return(contact_plan, ground_contact_plan)
+          if LOS_sgn[j] == 1.0 and LOS_sgn[j+1] == -1.0:
+            sat_contacts.extend(np.append(unrank_comb2(i, len(satellites)), [roots[j], roots[j+1]]))
+      # print(i)
+
+  ground_contacts = array('f')
+  if not(ground_stations is None):
+    for i, sat in enumerate(satellites):
+      sat_pos = sat.at(time_points).position.km.T
+      for j, gs in enumerate(ground_stations):
+        gs_pos = np.reshape(np.tile(gs, sat_pos.shape[0]), (sat_pos.shape[0],3))
+        D_line = np.array([dist_line2sphere(p0, p1, R=6378.0) for (p0, p1) in zip(sat_pos, gs_pos)])
+        f = CubicSpline(tp_tt, D_line)
+        roots = f.roots(discontinuity=False, extrapolate='periodic')
+        if len(roots) > 1:
+          LOS_sgn = np.sign(f(roots + 0.0001)) ## -1 := no in LOS, 1 := in LOS 
+          for j in range(len(LOS_sgn)-1):
+            if LOS_sgn[j] == 1.0 and LOS_sgn[j+1] <= 0.0:
+              ground_contacts.extend([i,j,roots[j], roots[j+1]])
+  
+  n_sc, n_gc = int(len(sat_contacts)/4), int(len(ground_contacts)/4)
+  s_cp = np.reshape(np.asarray(sat_contacts).flatten(), (n_sc, 4)) if n_sc > 0 else np.empty(shape=(0,4))
+  g_cp = np.reshape(np.asarray(ground_contacts).flatten(), (n_gc, 4)) if n_gc > 0 else np.empty(shape=(0,4))
+
+  if n_sc > 0 and n_gc == 0:
+    return(s_cp, (s_time, e_time))
+  elif n_gc > 0 and n_sc == 0:
+    return(g_cp, (s_time, e_time))
+  return(s_cp, g_cp, (s_time, e_time))
 
 def satellite_dpc(satellites):
   '''
