@@ -20,7 +20,8 @@ dependencies = [
   "numpy",
   "scipy",
   "skyfield",
-  "matplotlib"
+  "matplotlib", 
+  "cartopy"
 ]
 
 # [tool.hatch.build]

@@ -1,6 +1,7 @@
 import os
 
 def load_satellites():
+  # 'starlink.txt'
   import importlib.resources as pkg_resources
   from geom_dtn import data as package_data_mod
   # starlink = pkg_resources.read_text(package_data_mod, 'starlink.txt')

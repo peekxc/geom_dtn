@@ -271,3 +271,10 @@ node1 = Node(env, 1).run()
 p = simpy.events.Process(env=env, generator=node1)
 
 env.run(until=10)
+
+
+
+
+
+
+

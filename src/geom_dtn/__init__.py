@@ -1,7 +1,5 @@
 from .routing import load_satellites 
 
-import route
-
 from typing import * 
 from numpy.typing import ArrayLike
 from skyfield.api import Loader, EarthSatellite, load, wgs84 
@@ -16,7 +14,7 @@ import importlib.resources as pkg_resources
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_earth(wireframe=True, scale=1/5, surface_kwargs = None, **kwargs):
+def plot_earth_3D(wireframe=True, scale=1/5, surface_kwargs = None, **kwargs):
   # from: https://stackoverflow.com/questions/30269099/creating-a-rotatable-3d-earth
   assert scale <= 1.0, "scale must be between: 0 < scale <= 1.0"
   re = 6378.0
@@ -160,9 +158,21 @@ def satellite_dpc(satellites):
   '''
   Returns a closure parameterized by time whose evaluation yields the coordinates of a given dynamic point cloud.
 
-  Returns: 
-    - f()
-    - [b,e) := time range
+  Returns (f, (b, e)), where: 
+    - f := function that takes time 't' and returns cartesian coordinates of the satellites at time 't' 
+    - b := time range where 't' is begins, as a datetime object
+    - e := time range where 't' is ends, as a datetime object
+
+  The resulting 'f' is overloaded to handle multiple inputs. It's signature is: 
+  
+  f(t: Union[float, Time, datetime], cformat: str)
+
+  where: 
+    t: float => time is given in interval between [0, 1]
+    t: Time => 
+    t: datetime => time is given as a standard UTC datetime object
+    cformat == 'geocentric' => 
+    cformat == 'latlon' => WGS84 latitude/longitude
   '''
   from datetime import datetime, timedelta, time, date, timezone
   s_time = np.min([sat.epoch.utc_datetime() for sat in satellites])
@@ -172,21 +182,20 @@ def satellite_dpc(satellites):
   load = Loader(package_data_mod.__path__._path[0])
   ts = load.timescale()
 
-  def _gen_point_cloud(time: Union[float, Time, datetime], coords=['geocentric', 'latlon']):
+  def _gen_point_cloud(time: Union[float, Time, datetime], cformat=['geocentric', 'latlon', 'lonlat']):
     c_time = s_time + timedelta(microseconds=time*(e_time-s_time).microseconds) if isinstance(time, float) else time
     c_time = ts.from_datetime(c_time) if isinstance(c_time, datetime) else c_time
     assert isinstance(c_time, Time)
-    coords = 'geocentric' if coords == ['geocentric', 'latlon'] else coords
-    if coords == 'geocentric':
+    if cformat == 'geocentric':
       xyz = np.array([sat.at(c_time).position.km for sat in satellites])
       return(xyz)
-    else:
+    elif cformat == 'latlon' or cformat == 'lonlat':
       def latlon(geo_icrs):
         pos = wgs84.geographic_position_of(geo_icrs)
         return(np.array([pos.latitude.degrees, pos.longitude.degrees]))
       LL = np.array([latlon(sat.at(c_time)) for sat in satellites])
-      return(LL)
-  return(_gen_point_cloud)
+      return(LL if cformat == 'latlon' else np.c_[LL[:,1], LL[:,0]])
+  return(_gen_point_cloud, (s_time, e_time))
 
 
 def kinetic_events_del2D(f: Iterable):
