@@ -129,9 +129,9 @@ def sat_contact_plan(satellites: List, s_time: Optional[datetime] = None, e_time
 
 
   '''
-  if s_time == None: 
+  if s_time is None: 
     s_time = np.min([sat.epoch.utc_datetime() for sat in satellites])
-  if e_time == None: 
+  if e_time is None: 
     e_time = np.max([sat.epoch.utc_datetime() for sat in satellites])
   assert type(s_time) == datetime and type(e_time) == datetime
   
@@ -154,7 +154,7 @@ def sat_contact_plan(satellites: List, s_time: Optional[datetime] = None, e_time
       D_line = np.array([dist_line2sphere(p0, p1, R=6378.0) for (p0, p1) in zip(sat1_orbit, sat2_orbit)])
       f = CubicSpline(tp_tt, D_line)
       roots = f.roots(discontinuity=False, extrapolate='periodic')
-      if len(roots) > 1:
+      if len(roots) > 0:
         LOS_sgn = np.sign(f(roots + 0.0001)) ## -1 := no in LOS, 1 := in LOS 
         for j in range(len(LOS_sgn)-1):
           if LOS_sgn[j] == 1.0 and LOS_sgn[j+1] == -1.0:
@@ -186,7 +186,7 @@ def sat_contact_plan(satellites: List, s_time: Optional[datetime] = None, e_time
     return(g_cp, (s_time, e_time))
   return(s_cp, g_cp, (s_time, e_time))
 
-def satellite_dpc(satellites):
+def satellite_dpc(satellites, s_time=None, e_time=None):
   '''
   Returns a closure parameterized by time whose evaluation yields the coordinates of a given dynamic point cloud.
 
@@ -207,16 +207,17 @@ def satellite_dpc(satellites):
     cformat == 'latlon' => WGS84 latitude/longitude
   '''
   from datetime import datetime, timedelta, time, date, timezone
-  s_time = np.min([sat.epoch.utc_datetime() for sat in satellites])
-  e_time = np.max([sat.epoch.utc_datetime() for sat in satellites])
+  s_time = np.min([sat.epoch.utc_datetime() for sat in satellites]) if s_time is None else s_time
+  e_time = np.max([sat.epoch.utc_datetime() for sat in satellites]) if e_time is None else e_time
   
   from geom_dtn import data as package_data_mod
   load = Loader(package_data_mod.__path__._path[0])
   ts = load.timescale()
 
   def _gen_point_cloud(time: Union[float, Time, datetime], cformat=['geocentric', 'latlon', 'lonlat']):
-    c_time = s_time + timedelta(microseconds=time*(e_time-s_time).microseconds) if isinstance(time, float) else time
+    c_time = s_time + time*(e_time-s_time) if isinstance(time, float) else time
     c_time = ts.from_datetime(c_time) if isinstance(c_time, datetime) else c_time
+    print(c_time)
     assert isinstance(c_time, Time)
     if cformat == 'geocentric':
       xyz = np.array([sat.at(c_time).position.km for sat in satellites])
@@ -229,6 +230,10 @@ def satellite_dpc(satellites):
       return(LL if cformat == 'latlon' else np.c_[LL[:,1], LL[:,0]])
   return(_gen_point_cloud, (s_time, e_time))
 
+def normalize(a, axis=-1, order=2):
+  l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
+  l2[l2==0] = 1
+  return a / np.expand_dims(l2, axis)
 
 def kinetic_events_del2D(f: Iterable):
   '''

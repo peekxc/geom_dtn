@@ -13,4 +13,8 @@ f, (b,e) = satellite_dpc(S)
 ## Generate a contact plan. This can be very slow. 
 sat_CP, (st, et) = sat_contact_plan(S, resolution=20, progress=True)
 
-print(st)
+## Build the global 'multi-graph' representation from the contact plan
+import networkx as nx
+G = nx.MultiGraph()
+G.add_nodes_from(range(len(S)))
+keys = G.add_edges_from([(int(i),int(j),{ "start": s, "end": e }) for (i,j,s,e) in sat_CP])
